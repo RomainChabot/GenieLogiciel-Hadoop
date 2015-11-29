@@ -17,39 +17,43 @@ import java.io.IOException;
  */
 
 public class CounterProg {
+    public static final String WCP_GROUP = "WCP";
+
     private static class CounterMapper extends Mapper<Object, Text, Text, IntWritable> {
-        private final static IntWritable pop = new IntWritable();
+        private IntWritable pop = new IntWritable();
         private Text word = new Text();
-        private final static IntWritable total_pop = new IntWritable();
-        private final static IntWritable nb_cities = new IntWritable();
-        private final static IntWritable nb_pop = new IntWritable();
 
         @Override
         protected void map(Object key, Text value, Context context) throws IOException, InterruptedException {
             String tokens[] = value.toString().split(",");
-            String city = tokens[2];
+            String city = tokens[1];
             int population = 0;
             try {
                 population = Integer.valueOf(tokens[4]);
             } catch (Exception e){
-
+                context.getCounter(WCP_GROUP, WCPCounters.NB_INVALID_CITIES.toString()).increment(1);
             }
             if (population != 0){
                 word.set(city);
                 pop.set(population);
-                context.getCounter("WCP","nb_cities").increment(1);
+                context.getCounter(WCP_GROUP, WCPCounters.NB_POP.toString()).increment(1);
+                context.getCounter(WCP_GROUP, WCPCounters.TOT_POP.toString()).increment(population);
                 context.write(word, pop);
-            } else {
-
             }
         }
     }
 
     private static class CounterReducer extends Reducer<Text, IntWritable, Text, IntWritable>{
+        private final static IntWritable pop = new IntWritable();
+
         @Override
         protected void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
+            int cityPop = 0;
             for (IntWritable value : values)
-                context.write(key, value);
+                cityPop += value.get();
+            pop.set(cityPop);
+            context.getCounter(WCP_GROUP, WCPCounters.NB_CITIES.toString()).increment(1);
+            context.write(key, pop);
         }
 
     }
@@ -67,7 +71,6 @@ public class CounterProg {
         job.setOutputValueClass(IntWritable.class);
         job.setOutputFormatClass(TextOutputFormat.class);
         job.setInputFormatClass(TextInputFormat.class);
-        //job.getCounters().findCounter("WCP","nb_cities").getValue();
         FileInputFormat.addInputPath(job, new Path(args[0]));
         FileOutputFormat.setOutputPath(job, new Path(args[1]));
         System.exit(job.waitForCompletion(true) ? 0 : 1);

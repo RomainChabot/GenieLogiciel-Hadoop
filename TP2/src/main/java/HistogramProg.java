@@ -13,19 +13,16 @@ import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import java.io.IOException;
 
 /**
- * Created by rchabot on 04/11/15.
+ * Created by rchabot on 29/11/15.
  */
-
-
-public class FilteringProg {
-    private static class FilteringMapper extends Mapper<Object, Text, Text, IntWritable> {
-        private IntWritable pop = new IntWritable();
-        private Text word = new Text();
+public class HistogramProg {
+    private static class HistogramMapper extends Mapper<Object,Text,IntWritable,IntWritable> {
+        private final static IntWritable one = new IntWritable(1);
+        private IntWritable classe = new IntWritable();
 
         @Override
         protected void map(Object key, Text value, Context context) throws IOException, InterruptedException {
             String tokens[] = value.toString().split(",");
-            String city = tokens[1];
             int population = 0;
             try {
                 population = Integer.valueOf(tokens[4]);
@@ -33,31 +30,37 @@ public class FilteringProg {
 
             }
             if (population != 0){
-                word.set(city);
-                pop.set(population);
-                context.write(word, pop);
+                classe.set((int) Math.floor(Math.log10(population)));
+                context.write(classe, one);
             }
         }
     }
 
-    private static class FilteringReducer extends Reducer<Text, IntWritable, Text, IntWritable>{
+    private static class HistogramReducer extends Reducer<IntWritable, IntWritable, IntWritable, IntWritable> {
+        private IntWritable frequency = new IntWritable();
+        private IntWritable classe = new IntWritable();
+
         @Override
-        protected void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
+        protected void reduce(IntWritable key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
+            int nbCities = 0;
             for (IntWritable value : values)
-                context.write(key, value);
+                nbCities += value.get();
+            frequency.set(nbCities);
+            classe.set((int) Math.pow(10,key.get()));
+            context.write(classe, frequency);
         }
     }
 
     public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
         Configuration conf = new Configuration();
-        Job job = Job.getInstance(conf, "FilteringProg");
+        Job job = Job.getInstance(conf, "HistogramProg");
         job.setNumReduceTasks(1);
-        job.setJarByClass(FilteringProg.class);
-        job.setMapperClass(FilteringMapper.class);
-        job.setMapOutputKeyClass(Text.class);
+        job.setJarByClass(HistogramProg.class);
+        job.setMapperClass(HistogramMapper.class);
+        job.setMapOutputKeyClass(IntWritable.class);
         job.setMapOutputValueClass(IntWritable.class);
-        job.setReducerClass(FilteringReducer.class);
-        job.setOutputKeyClass(Text.class);
+        job.setReducerClass(HistogramReducer.class);
+        job.setOutputKeyClass(IntWritable.class);
         job.setOutputValueClass(IntWritable.class);
         job.setOutputFormatClass(TextOutputFormat.class);
         job.setInputFormatClass(TextInputFormat.class);
@@ -65,5 +68,4 @@ public class FilteringProg {
         FileOutputFormat.setOutputPath(job, new Path(args[1]));
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }
-
 }
