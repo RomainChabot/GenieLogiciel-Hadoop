@@ -68,9 +68,20 @@ public class HistogramProg {
         }
     }
 
-    public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
+    private static Configuration getConf(String [] args) throws IllegalArgumentException{
         Configuration conf = new Configuration();
-        conf.set(HISTO_CONF, LOG_CONF);
+        if (args.length == 2){
+            conf.set(HISTO_CONF, LOG_CONF);
+        } else if (args.length == 3) {
+            conf.set(HISTO_CONF, args[2]);
+        } else {
+            throw new IllegalArgumentException("Wrong number of arguments");
+        }
+        return conf;
+    }
+
+    public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
+        Configuration conf = getConf(args);
         Job job = Job.getInstance(conf, "HistogramProg");
         job.setNumReduceTasks(1);
         job.setJarByClass(HistogramProg.class);
