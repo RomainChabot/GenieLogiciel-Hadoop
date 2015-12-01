@@ -75,7 +75,8 @@ public class HistogramProg {
         } else if (args.length == 3) {
             conf.set(HISTO_CONF, args[2]);
         } else {
-            throw new IllegalArgumentException("Wrong number of arguments");
+            throw new IllegalArgumentException("Usage: yarn jar TP2-Program.jar HistogramProg InputURI " +
+                    "OutPutURI [\"log\",\"dec\"]");
         }
         return conf;
     }
