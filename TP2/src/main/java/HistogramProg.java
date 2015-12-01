@@ -16,9 +16,20 @@ import java.io.IOException;
  * Created by rchabot on 29/11/15.
  */
 public class HistogramProg {
+    public static final String LOG_CONF = "log";
+    public static final String DEC_CONF = "dec";
+    public static final String HISTO_CONF = "histo_conf";
+
     private static class HistogramMapper extends Mapper<Object,Text,IntWritable,IntWritable> {
         private final static IntWritable one = new IntWritable(1);
         private IntWritable classe = new IntWritable();
+        private String histogramConf;
+
+        @Override
+        protected void setup(Context context) throws IOException, InterruptedException {
+            Configuration conf = context.getConfiguration();
+            histogramConf = conf.get(HISTO_CONF);
+        }
 
         @Override
         protected void map(Object key, Text value, Context context) throws IOException, InterruptedException {
@@ -30,8 +41,14 @@ public class HistogramProg {
 
             }
             if (population != 0){
-                classe.set((int) Math.floor(Math.log10(population)));
-                context.write(classe, one);
+                if (histogramConf.equals(DEC_CONF)){
+                    int pow = (int) Math.floor(Math.log10(population));
+                    classe.set((population / (int) Math.pow(10,pow))*(int) Math.pow(10,pow));
+                    context.write(classe, one);
+                } else {
+                    classe.set((int) Math.floor(Math.log10(population)));
+                    context.write(classe, one);
+                }
             }
         }
     }
@@ -39,6 +56,13 @@ public class HistogramProg {
     private static class HistogramReducer extends Reducer<IntWritable, IntWritable, IntWritable, IntWritable> {
         private IntWritable frequency = new IntWritable();
         private IntWritable classe = new IntWritable();
+        private String histogramConf;
+
+        @Override
+        protected void setup(Reducer.Context context) throws IOException, InterruptedException {
+            Configuration conf = context.getConfiguration();
+            histogramConf = conf.get(HISTO_CONF);
+        }
 
         @Override
         protected void reduce(IntWritable key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
@@ -46,13 +70,17 @@ public class HistogramProg {
             for (IntWritable value : values)
                 nbCities += value.get();
             frequency.set(nbCities);
-            classe.set((int) Math.pow(10,key.get()));
+            if (histogramConf.equals(DEC_CONF))
+                classe.set(key.get());
+            else
+                classe.set((int) Math.pow(10,key.get()));
             context.write(classe, frequency);
         }
     }
 
     public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
         Configuration conf = new Configuration();
+        conf.set(HISTO_CONF, LOG_CONF);
         Job job = Job.getInstance(conf, "HistogramProg");
         job.setNumReduceTasks(1);
         job.setJarByClass(HistogramProg.class);
