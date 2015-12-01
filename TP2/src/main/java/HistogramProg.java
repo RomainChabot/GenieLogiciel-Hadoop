@@ -70,9 +70,10 @@ public class HistogramProg {
 
     private static Configuration getConf(String [] args) throws IllegalArgumentException{
         Configuration conf = new Configuration();
+
         if (args.length == 2){
             conf.set(HISTO_CONF, LOG_CONF);
-        } else if (args.length == 3) {
+        } else if (args.length == 3 && ((args[2].equals(LOG_CONF)) || (args[2].equals(DEC_CONF)))){
             conf.set(HISTO_CONF, args[2]);
         } else {
             throw new IllegalArgumentException("Usage: yarn jar TP2-Program.jar HistogramProg InputURI " +
