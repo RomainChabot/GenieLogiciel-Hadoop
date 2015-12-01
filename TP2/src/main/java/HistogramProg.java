@@ -46,7 +46,7 @@ public class HistogramProg {
                     classe.set((population / (int) Math.pow(10,pow))*(int) Math.pow(10,pow));
                     context.write(classe, one);
                 } else {
-                    classe.set((int) Math.floor(Math.log10(population)));
+                    classe.set((int) Math.pow(10,(int) Math.floor(Math.log10(population))));
                     context.write(classe, one);
                 }
             }
@@ -56,13 +56,6 @@ public class HistogramProg {
     private static class HistogramReducer extends Reducer<IntWritable, IntWritable, IntWritable, IntWritable> {
         private IntWritable frequency = new IntWritable();
         private IntWritable classe = new IntWritable();
-        private String histogramConf;
-
-        @Override
-        protected void setup(Reducer.Context context) throws IOException, InterruptedException {
-            Configuration conf = context.getConfiguration();
-            histogramConf = conf.get(HISTO_CONF);
-        }
 
         @Override
         protected void reduce(IntWritable key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
@@ -70,10 +63,7 @@ public class HistogramProg {
             for (IntWritable value : values)
                 nbCities += value.get();
             frequency.set(nbCities);
-            if (histogramConf.equals(DEC_CONF))
-                classe.set(key.get());
-            else
-                classe.set((int) Math.pow(10,key.get()));
+            classe.set(key.get());
             context.write(classe, frequency);
         }
     }
