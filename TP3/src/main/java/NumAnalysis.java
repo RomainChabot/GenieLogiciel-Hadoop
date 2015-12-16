@@ -16,16 +16,18 @@ public class NumAnalysis {
 
     public static class RegionMapper extends Mapper<Object, Text, IntWritable, RegionSummary> {
         public int nb_step = 0;
+
         public void setup(Context context) {
             Configuration conf = context.getConfiguration();
             nb_step = conf.getInt("steps", 10);
         }
+
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
             String tokens[] = value.toString().split(",");
-            if (tokens.length < 7 || tokens[4].length()==0)
+            if (tokens.length < 7 || tokens[4].length() == 0) {
                 return;
+            }
             else {
-
                 RegionSummary regionStats;
                 String city;
                 int region;
@@ -45,39 +47,48 @@ public class NumAnalysis {
                     context.write(new IntWritable(region), regionStats);
                 } catch (IncoherentLatLongException e) {
                     e.printStackTrace();
-                } catch (Exception e) {
-                    e.printStackTrace();
+                }
+                catch (NumberFormatException e){
+                    //
                 }
             }
         }
     }
-    public static class RegionCombiner extends Reducer<IntWritable, IntWritable, IntWritable, IntWritable> {
-        public void reduce(IntWritable key, Iterable<IntWritable> values,Context context) throws IOException, InterruptedException {
-            int sum = 0;
-            for (IntWritable val : values) {
-                sum += val.get();
+    public static class RegionCombiner extends Reducer<IntWritable, RegionSummary, IntWritable, RegionSummary> {
+        @Override
+        public void reduce(IntWritable key, Iterable<RegionSummary> values, Context context) throws IOException, InterruptedException {
+            boolean isFirstLoop = true;
+            RegionSummary regionSummary = null;
+
+            for (RegionSummary val : values) {
+                if(isFirstLoop){
+                    regionSummary = val;
+                    isFirstLoop = false;
+                }
+                regionSummary.merge(val);
             }
-            context.write(key, new IntWritable(sum));
+            context.write(key, regionSummary);
         }
-        //TODO: a changer
     }
-    public static class RegionReducer extends Reducer<IntWritable, IntWritable, Text, IntWritable> {
+    public static class RegionReducer extends Reducer<IntWritable, RegionSummary, IntWritable, Text> {
         public int nb_step = 0;
         public void setup(Context context) {
             Configuration conf = context.getConfiguration();
             nb_step = conf.getInt("steps", 10);
         }
-        public void reduce(IntWritable key, Iterable<IntWritable> values,Context context) throws IOException, InterruptedException {
-            int sum = 0;
-            for (IntWritable val : values) {
-                sum += val.get();
+        public void reduce(IntWritable key, Iterable<RegionSummary> values,Context context) throws IOException, InterruptedException {
+            boolean isFirstLoop = true;
+            RegionSummary regionSummary = null;
+
+            for (RegionSummary val : values) {
+                if(isFirstLoop){
+                    regionSummary = val;
+                    isFirstLoop = false;
+                }
+                regionSummary.merge(val);
             }
-            int val = (int)Math.pow(10, key.get()/(double)nb_step);
-            StringBuffer b = new StringBuffer();
-            b.append(val);
-            context.write(new Text(b.toString()), new IntWritable(sum));
+            context.write(key, new Text(regionSummary.toString()));
         }
-        //TODO: a changer
     }
 
 
@@ -86,8 +97,8 @@ public class NumAnalysis {
         Job job = Job.getInstance(conf, "Clean population");
         job.setJarByClass(NumAnalysis.class);
 
-        job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(IntWritable.class);
+        job.setOutputKeyClass(IntWritable.class);
+        job.setOutputValueClass(RegionSummary.class);
         job.setOutputFormatClass(TextOutputFormat.class);
         job.setInputFormatClass(TextInputFormat.class);
 
@@ -100,16 +111,16 @@ public class NumAnalysis {
         }
         int returnCode = 0;
         switch (commande) {
-            case "clean":
+            case "region":
                 job.setMapperClass(RegionMapper.class);
+                job.setCombinerClass(RegionCombiner.class);
                 job.setReducerClass(RegionReducer.class);
                 returnCode = job.waitForCompletion(true) ? 0 : 1;
                 break;
         }
         System.out.println("Usage: commands args");
         System.out.println("commands:");
-        System.out.println(" - clean [inputURI] [outputURI]");
-        System.out.println(" - histo [inputURI] [outputURI] [NBSTEPS");
+        System.out.println(" - region [inputURI] [outputURI]");
         returnCode = 1;
         System.exit(returnCode);
     }
