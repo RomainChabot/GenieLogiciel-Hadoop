@@ -1,0 +1,8 @@
+format des données :
+date ; heure ; nom de la boite ; action en cours ; max de l'action jusqu'à présent ; minimum de l'action jusqu'à présent ; 
+
+date : nom du fichiertimestamp unix
+
+sortir les 10 actions les plus actions les plus performantes du mois.
+
+envoyer par mail jar + pdf anvec la balise [IT360]
