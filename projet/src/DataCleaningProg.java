@@ -30,12 +30,26 @@ public class DataCleaningProg {
 
                 Document doc = null;
                 doc = Jsoup.parse(tmpInputFile, "UTF-8");
-                Elements indexTab = doc.select("tr[href^=/cours.phtml?symbole]");
 
                 File tmpOutput = File.createTempFile("hadoop", "__output");
-                for (Element e : indexTab) {
-                    writeIndiceFields(tmpOutput, e);
+
+                if (fileExtension.equals("dev")){
+
+                } else if (fileExtension.equals("srd")){
+                    Elements indexTab = doc.select("div.main-content > table > tbody > tr");
+                    for (Element e : indexTab) {
+                        writeActionFields(tmpOutput, e);
+                    }
+                } else if (fileExtension.equals("ind")){
+                    Elements indexTab = doc.select("tr[href^=/cours.phtml?symbole]");
+                    for (Element e : indexTab)
+                    {
+                        writeIndiceFields(tmpOutput, e);
+                    }
+                } else {
+                    System.out.println("Extension de fichier inconnue : "+fileExtension);
                 }
+
                 fs.copyFromLocalFile(new Path(tmpOutput.getPath()), new Path(args[1]+"/"+fileName));
                 tmpOutput.delete();
                 tmpInputFile.delete();
@@ -46,13 +60,31 @@ public class DataCleaningProg {
     }
 
     private static void writeActionFields(File outputFile, Element e) {
-        System.out.println("action");
+        try (PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(outputFile, true)))) { //autaumatic close
+            out.print(e.getElementsByClass("tdv-libelle").text()+";");
+            out.print(e.getElementsByClass("tdv-last").text().replaceAll(" ", "").replaceAll("\\(c\\)", "").replaceAll("\\(s\\)", "")+";");
+            out.print(e.getElementsByClass("tdv-var").text().replaceAll("%", "")+";");
+            out.print(e.getElementsByClass("tdv-open").text().replaceAll(" ", "")+";");
+            out.print(e.getElementsByClass("tdv-high").text().replaceAll(" ", "")+";");
+            out.print(e.getElementsByClass("tdv-low").text().replaceAll(" ", "")+";");
+            out.print(e.getElementsByClass("tdv-var_an").text().replaceAll(" ", "").replaceAll("%", "")+";");
+            out.println(e.getElementsByClass("tdv-tot_volume").text().replaceAll(" ", ""));
+        } catch (IOException ex) {
+            //exception handling left as an exercise for the reader
+        }
     }
 
 
     private static void writeIndiceFields(File outputFile, Element e) {
         try (PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(outputFile, true)))) { //autaumatic close
-            out.println(e.text());
+            out.print(e.getElementsByClass("tdv-libelle").text()+";");
+            out.print(e.getElementsByClass("tdv-last").text()+";");
+            out.print(e.getElementsByClass("tdv-var").text()+";");
+            out.print(e.getElementsByClass("tdv-open").text()+";");
+            out.print(e.getElementsByClass("tdv-high").text()+";");
+            out.print(e.getElementsByClass("tdv-low").text()+";");
+            out.print(e.getElementsByClass("tdv-prev_close").text()+";");
+            out.println(e.getElementsByClass("tdv-var_an").text());
         } catch (IOException ex) {
             //exception handling left as an exercise for the reader
         }
