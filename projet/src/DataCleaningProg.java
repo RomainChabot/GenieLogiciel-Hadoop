@@ -32,37 +32,33 @@ public class DataCleaningProg {
                 doc = Jsoup.parse(tmpInputFile, "UTF-8");
                 Elements indexTab = doc.select("tr[href^=/cours.phtml?symbole]");
 
+                File tmpOutput = File.createTempFile("hadoop", "__output");
                 for (Element e : indexTab) {
-                    File tmpOutput = File.createTempFile("hadoop", "__output");
-                    try (PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(tmpOutput, true)))) { //autaumatic close
-                        out.println(e.text());
-                    } catch (IOException ex) {
-                        //exception handling left as an exercise for the reader
-                    }
-                    fs.copyFromLocalFile(new Path(tmpOutput.getPath()), new Path(args[1]+"/"+);
-                    tmpOutput.delete();
+                    writeIndiceFields(tmpOutput, e);
                 }
-
-
+                fs.copyFromLocalFile(new Path(tmpOutput.getPath()), new Path(args[1]+"/"+fileName));
+                tmpOutput.delete();
                 tmpInputFile.delete();
-
-
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private static void writeActionFields(String unixTimestamp, Element e) {
+    private static void writeActionFields(File outputFile, Element e) {
         System.out.println("action");
     }
 
 
-    private static void writeIndiceFields(String unixTimestamp, Element e) {
-        System.out.println("indices");
+    private static void writeIndiceFields(File outputFile, Element e) {
+        try (PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(outputFile, true)))) { //autaumatic close
+            out.println(e.text());
+        } catch (IOException ex) {
+            //exception handling left as an exercise for the reader
+        }
     }
 
-    private static void writeDeviceFields(String unixTimestamp, Element e) {
+    private static void writeDeviceFields(File outputFile, Element e) {
         System.out.println("Device");
     }
 
