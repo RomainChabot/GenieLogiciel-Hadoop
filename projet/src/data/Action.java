@@ -1,5 +1,6 @@
 package data;
 
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
 import java.io.DataInput;
@@ -11,6 +12,7 @@ import java.io.IOException;
  */
 public class Action implements Writable {
     private String libelle;
+    private double last;
     private double var;
     private double open;
     private double high;
@@ -21,6 +23,7 @@ public class Action implements Writable {
     @Override
     public void write(DataOutput out) throws IOException {
         out.writeUTF(libelle);
+        out.writeDouble(last);
         out.writeDouble(var);
         out.writeDouble(open);
         out.writeDouble(high);
@@ -32,12 +35,21 @@ public class Action implements Writable {
     @Override
     public void readFields(DataInput in) throws IOException {
         libelle = in.readUTF();
+        last = in.readDouble();
         var = in.readDouble();
         open = in.readDouble();
         high = in.readDouble();
         low = in.readDouble();
         varAn = in.readDouble();
         totVolume = in.readDouble();
+    }
+
+    public double getLast() {
+        return last;
+    }
+
+    public void setLast(double last) {
+        this.last = last;
     }
 
     public String getLibelle() {
@@ -107,5 +119,19 @@ public class Action implements Writable {
                 ", varAn=" + varAn +
                 ", totVolume=" + totVolume +
                 '}';
+    }
+
+    public static Action getFromCSV(Text value) {
+        Action action = new Action();
+        String tokens[] = value.toString().split(";");
+        action.setLibelle(tokens[0]);
+        try { action.setLast(Double.valueOf(tokens[1]));} catch (NumberFormatException e){}
+        try { action.setVar(Double.valueOf(tokens[2]));} catch (NumberFormatException e){}
+        try { action.setOpen(Double.valueOf(tokens[3]));} catch (NumberFormatException e){}
+        try { action.setHigh(Double.valueOf(tokens[4]));} catch (NumberFormatException e){}
+        try { action.setLow(Double.valueOf(tokens[5]));} catch (NumberFormatException e){}
+        try { action.setVarAn(Double.valueOf(tokens[6]));} catch (NumberFormatException e){}
+        try { action.setTotVolume(Double.valueOf(tokens[7]));} catch (NumberFormatException e){}
+        return action;
     }
 }

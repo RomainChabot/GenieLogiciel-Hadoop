@@ -13,12 +13,20 @@ import java.io.*;
 /**
  * Created by rchabot on 24/01/16.
  */
-public class DataCleaningProg {
+public class DataCleaner {
+    private String srcFolder;
+    private String dstFolder;
 
-    public static void main(String[] args) {
+    public DataCleaner(String srcFolder, String dstFolder){
+        this.srcFolder = srcFolder;
+        this.dstFolder = dstFolder;
+    }
+
+    public void run() {
+        System.out.println("Cleaning in progress... ");
         try {
             FileSystem fs = FileSystem.get(new Configuration());
-            FileStatus[] statuses = fs.listStatus(new Path(args[0]));
+            FileStatus[] statuses = fs.listStatus(new Path(srcFolder));
             for (int i=0;i<statuses.length;i++) {
                 Path path = statuses[i].getPath();
                 String fileName = statuses[i].getPath().getName();
@@ -50,13 +58,14 @@ public class DataCleaningProg {
                     System.out.println("Extension de fichier inconnue : "+fileExtension);
                 }
 
-                fs.copyFromLocalFile(new Path(tmpOutput.getPath()), new Path(args[1]+"/"+fileName));
+                fs.copyFromLocalFile(new Path(tmpOutput.getPath()), new Path(dstFolder+"/"+fileName));
                 tmpOutput.delete();
                 tmpInputFile.delete();
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
+        System.out.println("End of data cleaning !");
     }
 
     private static void writeActionFields(File outputFile, Element e) {
