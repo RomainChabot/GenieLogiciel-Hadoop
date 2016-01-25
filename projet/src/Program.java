@@ -46,10 +46,10 @@ public class Program {
             k = conf.getInt("k", 10);
             startTimestamp = conf.getLong("start", 0);
             endTimestamp = conf.getLong("end", 0);
-            System.out.println("unixTimeStamp: "+unixTimestamp);
+/*            System.out.println("unixTimeStamp: "+unixTimestamp);
             System.out.println("startTimestamp: "+startTimestamp);
             System.out.println("endTimestamp: "+endTimestamp);
-            System.out.println("k : "+k);
+            System.out.println("k : "+k);*/
         }
 
         @Override
@@ -60,11 +60,11 @@ public class Program {
                 val.setVal(action.getLast());
                 if (unixTimestamp == startTimestamp) {
                     val.setBoundaryDate(BoundaryDate.BEGINNING);
-                    System.out.println("action: "+action.getLibelle()+" (BEGINNING)");
+                    //System.out.println("action: "+action.getLibelle()+" (BEGINNING)");
                     context.write(word, val);
                 } else if (unixTimestamp == endTimestamp){
                     val.setBoundaryDate(BoundaryDate.END);
-                    System.out.println("action: "+action.getLibelle()+" (END)");
+                    //System.out.println("action: "+action.getLibelle()+" (END)");
                     context.write(word, val);
                 } else {
                     // On envoie rien
