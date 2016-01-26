@@ -4,11 +4,8 @@ import data.CorrelationKey;
 import data.TopKVal;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.BytesWritable;
-import org.apache.hadoop.io.DoubleWritable;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.Text;
+import org.apache.hadoop.fs.*;
+import org.apache.hadoop.io.*;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
@@ -17,6 +14,10 @@ import org.apache.hadoop.mapreduce.lib.input.FileSplit;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
 import java.io.*;
 import java.lang.reflect.ParameterizedType;
@@ -28,6 +29,73 @@ import java.util.TreeMap;
  * Created by rchabot on 23/01/16.
  */
 public class Program {
+
+    public static class CleanerMapper extends Mapper<Object, BytesWritable, Text, Text>{
+        private Text keyText = new Text();
+        private Text valueText = new Text();
+        private String fileName;
+        private String fileExtension;
+        private long unixTimestamp;
+
+        @Override
+        protected void setup(Context context) throws java.io.IOException, java.lang.InterruptedException
+        {
+            fileName = ((FileSplit) context.getInputSplit()).getPath().toString();
+            unixTimestamp = Long.parseLong(new File(FilenameUtils.removeExtension(fileName)).getName());
+            fileExtension = FilenameUtils.getExtension(fileName);
+        }
+
+        @Override
+        protected void map(Object key, BytesWritable value, Context context) throws IOException, InterruptedException {
+            InputStream is = new ByteArrayInputStream(value.getBytes());
+            Document doc = Jsoup.parse(is, "UTF-8", "");
+            if (fileExtension.equals("srd")) {
+                Elements indexTab = doc.select("div.main-content > table > tbody > tr");
+                for (Element e : indexTab) {
+                    // Filename, remove unauthorized character
+                    keyText.set(e.getElementsByClass("tdv-libelle").text().replaceAll(":","."));
+                    valueText.set(Action.convertToCSV(e, unixTimestamp));
+                    context.write(keyText, valueText);
+                }
+            } else if (fileExtension.equals("ind")) {
+
+            } else if (fileExtension.equals("dev")){
+
+            }
+            is.close();
+        }
+    }
+
+    public static class CleanerReducer extends Reducer<Text, Text, NullWritable, NullWritable>{
+        private String srcFolder;
+        private String dstFolder;
+
+        @Override
+        protected void setup(Reducer.Context context) throws java.io.IOException, java.lang.InterruptedException
+        {
+            Configuration conf = context.getConfiguration();
+            srcFolder = conf.get("srcFolder");
+            dstFolder = conf.get("dstFolder");
+            System.out.println("srcFolder: "+srcFolder);
+            System.out.println("dstFolder: "+dstFolder);
+        }
+
+        @Override
+        protected void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+            System.out.println("Reducing action "+key);
+            FileSystem fs = FileSystem.get(new Configuration());
+            File tmpOutput = File.createTempFile("hadoop", "__output");
+            for (Text csv : values) {
+                try (PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(tmpOutput, true)))) {
+                    out.println(csv.toString());
+                } catch (IOException ex) {
+                    //exception handling left as an exercise for the reader
+                }
+            }
+            fs.copyFromLocalFile(new Path(tmpOutput.getPath()), new Path(dstFolder+"/"+key));
+            tmpOutput.delete();
+        }
+    }
 
     public static class TopKMapper extends Mapper<Object, Text, Text, TopKVal> {
         private Text word = new Text();
@@ -122,13 +190,13 @@ public class Program {
     public static class CorrelationMapper extends Mapper<Object, BytesWritable, CorrelationKey, DoubleWritable>{
         private Text word = new Text();
         private TopKVal val = new TopKVal();
+        private
         String fileName;
         long startTimestamp;
         long endTimestamp;
         String fileExtension;
         long unixTimestamp;
         int k = 0;
-
 
         @Override
         protected void setup(Context context) throws java.io.IOException, java.lang.InterruptedException
@@ -160,18 +228,21 @@ public class Program {
 
             }
 
-            for (int i=0; i < actions.size(); i++){
+            /*for (int i=0; i < actions.size(); i++){
                 for (int j=i+1; j < actions.size(); j++){
                     Action action1 = actions.get(i);
                     Action action2 = actions.get(j);
                     if (!action1.equals(action2)){
                         double corrIndice = Math.abs(action1.getVar() - action2.getVar());
-                        CorrelationKey correlationKey = new CorrelationKey();
-                        correlationKey.setActions(action1.getLibelle(), action2.getLibelle());
+                        if (corrIndice < diffMax) {
+                            CorrelationKey correlationKey = new CorrelationKey();
+                            correlationKey.setActions(action1.getLibelle(), action2.getLibelle());
+
+                        }
                         context.write(correlationKey, new DoubleWritable(corrIndice));
                     }
                 }
-            }
+            }*/
         }
     }
 
@@ -227,8 +298,15 @@ public class Program {
                 if (args.length != 3){
                     return;
                 }
-                DataCleaner cleaner = new DataCleaner(args[1], args[2]);
-                cleaner.run();
+                conf = new Configuration();
+                conf.set("srcFolder", args[1]);
+                conf.set("dstFolder", args[2]);
+                job = configureJob(conf, inputPath, outputPath);
+                job.setOutputFormatClass(TextOutputFormat.class);
+                job.setInputFormatClass(WholeFileInputFormat.class);
+                configJobWithReflection(job, CleanerMapper.class, null, CleanerReducer.class);
+                returnCode = job.waitForCompletion(true) ? 0 : 1;
+                System.out.println("Finished job with result " + returnCode);
                 break;
             case "topk":
                 if (args.length != 6) {

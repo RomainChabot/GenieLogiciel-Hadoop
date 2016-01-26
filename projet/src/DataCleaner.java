@@ -35,7 +35,6 @@ public class DataCleaner {
 
                 File tmpInputFile = File.createTempFile("hadoop", "");
                 fs.copyToLocalFile(path, new Path(tmpInputFile.getPath()));
-
                 Document doc = null;
                 doc = Jsoup.parse(tmpInputFile, "UTF-8");
 
