@@ -1,12 +1,12 @@
-import data.Action;
-import data.BoundaryDate;
-import data.CorrelationKey;
-import data.CorrelationValue;
-import data.TopKVal;
+import data.*;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.*;
-import org.apache.hadoop.io.*;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.BytesWritable;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
@@ -24,6 +24,8 @@ import java.io.*;
 import java.lang.reflect.ParameterizedType;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.TreeMap;
 
 public class Program {
@@ -184,23 +186,23 @@ public class Program {
         }
     }
 
-    public static class CorrelationMapper extends Mapper<Object, BytesWritable, String, CorrelationValue>{
+    public static class CorrelationMapper extends Mapper<Object, BytesWritable, Text, CorrelationValue>{
         private Text word = new Text();
-        private TopKVal val = new TopKVal();
+        private CorrelationValue val = new CorrelationValue();
         private
-        String fileName;
+        String filePath;
         long startTimestamp;
         long endTimestamp;
         String fileExtension;
-        long unixTimestamp;
+        String fileName;
         int k = 0;
 
         @Override
         protected void setup(Context context) throws java.io.IOException, java.lang.InterruptedException
         {
-            fileName = ((FileSplit) context.getInputSplit()).getPath().toString();
-            unixTimestamp = Long.parseLong(new File(FilenameUtils.removeExtension(fileName)).getName());
-            fileExtension = FilenameUtils.getExtension(fileName);
+            filePath = ((FileSplit) context.getInputSplit()).getPath().toString();
+            fileExtension = FilenameUtils.getExtension(filePath);
+            fileName = FilenameUtils.getName(filePath);
             Configuration conf = context.getConfiguration();
             k = conf.getInt("k", 10);
             startTimestamp = conf.getLong("start", 0);
@@ -212,40 +214,40 @@ public class Program {
             InputStream is = new ByteArrayInputStream(value.getBytes());
             BufferedReader reader = new BufferedReader(new InputStreamReader(is));
             String line;
-            ArrayList<Action> actions = new ArrayList<>();
+
+            double sum = 0.0;
+            int nbVar = 0;
+
             if (fileExtension.equals("srd")) {
                 while ((line = reader.readLine()) != null) {
-                    Action action = Action.getFromCSV(line.toString());
-                    if (action != null)
-                        actions.add(action);
+                    Action action = Action.getFromCSV(line);
+                    if (action != null){
+                        val.putVariation(action.getTimestamp(), action.getVar());
+                        sum += action.getVar();
+                        nbVar++;
+                    }
                 }
+                word.set(fileName);
+                double avg =  (sum / (double) nbVar);
+                System.out.println("Moyenne "+fileName+" :"+avg);
+                val.setAvg(avg);
+                context.write(word, val);
             } else if (fileExtension.equals("ind")) {
 
             } else if (fileExtension.equals("dev")){
 
             }
 
-            /*for (int i=0; i < actions.size(); i++){
-                for (int j=i+1; j < actions.size(); j++){
-                    Action action1 = actions.get(i);
-                    Action action2 = actions.get(j);
-                    if (!action1.equals(action2)){
-                        double corrIndice = Math.abs(action1.getVar() - action2.getVar());
-                        if (corrIndice < diffMax) {
-                            CorrelationKey correlationKey = new CorrelationKey();
-                            correlationKey.setActions(action1.getLibelle(), action2.getLibelle());
-
-                        }
-                        context.write(correlationKey, new DoubleWritable(corrIndice));
-                    }
-                }
-            }*/
         }
     }
 
-    public static class CorrelationReducer extends Reducer<String, CorrelationValue, String, CorrelationValue> {
+    public static class CorrelationReducer extends Reducer<Text, CorrelationValue, StringPair, Text> {
         int k = 0;
-        private TreeMap<CorrelationValue, String> topK = new TreeMap<>();
+        private StringPair word = new StringPair();
+        private TreeMap<Double, StringPair> topKCorrelation = new TreeMap<>();
+        private Map<String, Double> varianceMap = new HashMap<>();
+        private Map<String, Double> avgMap = new HashMap<>();
+        private Map<String, WritableActionMap> valuesMap = new HashMap<>();
 
         @Override
         protected void setup(Context context) throws IOException, InterruptedException {
@@ -254,25 +256,87 @@ public class Program {
         }
 
         @Override
-        protected void reduce(String key, Iterable<CorrelationValue> values, Context context) throws IOException, InterruptedException {
-            System.out.println(key.toString());
-            double sum = 0;
-            for (DoubleWritable corrInd : values){
-                sum += corrInd.get();
+        protected void reduce(Text key, Iterable<CorrelationValue> values, Context context) throws IOException, InterruptedException {
+            System.out.println("Reduce " + key);
+            String actionKey = key.toString();
+            for (CorrelationValue value : values) {
+                valuesMap.put(actionKey, value.getVariation());
+                avgMap.put(actionKey, value.getAvg());
+                WritableActionMap map = value.getVariation();
+                double avg = value.getAvg();
+                double sum = 0.0;
+                int count = 0;
+                for (Long timestamp : map.keySet()) {
+                    Double val = map.get(timestamp);
+                    if (val != null) {
+                        sum += Math.pow((val + avg), 2);
+                        count++;
+                    }
+                }
+                double variance = (sum / (double) count);
+                varianceMap.put(actionKey, variance);
             }
-            CorrelationKey treeValue = new CorrelationKey();
-            treeValue.setActions(key.getAction1(), key.getAction2());
-            topK.put(sum, treeValue);
-            if (topK.size() > k)
-                topK.remove(topK.lastKey());
         }
 
         @Override
         protected void cleanup(Context context) throws IOException, InterruptedException {
-            for (double key : topK.keySet()) {
-                CorrelationKey correlationKey = topK.get(key);
-                context.write(correlationKey, new DoubleWritable(key));
+            System.out.println("Cleanup");
+            System.out.println("VarianceMap");
+            for (String action : varianceMap.keySet()) {
+                System.out.println(varianceMap.get(action));
             }
+            System.out.println("AvgMap");
+            for (String action : avgMap.keySet()) {
+                System.out.println(avgMap.get(action));
+            }
+            System.out.println("valuesMap");
+            for (String action : valuesMap.keySet()) {
+                WritableActionMap map = valuesMap.get(action);
+                for (Long timestamp : map.keySet()) {
+                    System.out.println("<" + timestamp + "," + map.get(timestamp) + ">");
+                }
+            }
+            /*for (String action1 : valuesMap.keySet()) {
+                for (String action2 : valuesMap.keySet()) {
+                    Double covariance = 0.;
+                    // On évite de calculer 2 fois la même paire
+                    if (action1.compareTo(action2) < 0) {
+                        System.out.println(action1+" & "+action2);
+                        double avg1 = avgMap.get(action1);
+                        double avg2 = avgMap.get(action2);
+                        double variance1 = varianceMap.get(action1);
+                        double variance2 = varianceMap.get(action2);
+                        WritableActionMap values1 = valuesMap.get(action1);
+                        WritableActionMap values2 = valuesMap.get(action2);
+
+                        int nbVarValid = 0;
+                        for (Long timestamp : values1.keySet()) {
+                            Double var1 = values1.get(timestamp);
+                            Double var2 = values2.get(timestamp);
+                            if (var1 != null && var2 != null) {
+                                nbVarValid++;
+                                System.out.println("("+var1+"-"+avg1+")*("+var2+"-"+avg2+")");
+                                covariance += (var1 - avg1) * (var2 - avg2);
+                                System.out.println("covariance="+covariance+" (nbValid="+nbVarValid+")");
+                            }
+                        }
+                        covariance /= nbVarValid;
+                        double correlation = Math.abs(covariance / ((Math.sqrt(variance1) * Math.sqrt(variance2))));
+                        StringPair actionsPair = new StringPair(action1, action2);
+                        topKCorrelation.put(correlation, actionsPair);
+                        if (topKCorrelation.size() > k) {
+                            topKCorrelation.remove(topKCorrelation.firstKey());
+                        }
+                    }
+                }*/
+
+            /*DecimalFormat df3 = new DecimalFormat("#.###");
+            ArrayList<Double> topKCorrelationList = new ArrayList<>(topKCorrelation.keySet());
+            for (int pos=topKCorrelationList.size()-1; pos >=0; pos--) {
+                Double correlation = topKCorrelationList.get(pos);
+                StringPair actionsPair = topKCorrelation.get(correlation);
+                context.write(actionsPair, new Text("Indice de corrélation = "+df3.format(correlation)+" (en valeur absolue)"));
+            }*/
         }
     }
 

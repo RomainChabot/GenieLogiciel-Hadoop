@@ -8,16 +8,28 @@ import java.io.IOException;
 
 public class CorrelationValue extends Pair<Double, WritableActionMap> implements Writable{
 
-    public Double getMean() {
+    public CorrelationValue(){
+        fst = new Double(0.0);
+        snd = new WritableActionMap();
+    }
+
+
+    public Double getAvg() {
         return fst;
     }
-    public void setMean(Double variance) {
+    public void setAvg(Double variance) {
         fst = variance;
     }
-    public Double getVariation(Long timestamp){
+    public WritableActionMap getVariation(){
+        return snd;
+    }
+    public Double getVariationAt(Long timestamp){
         return snd.get(timestamp);
     }
-    public void setVariation(Long timestamp, Double variation){
+    public void setVariation(WritableActionMap actionMap){
+        snd = actionMap;
+    }
+    public void putVariation(Long timestamp, Double variation){
         snd.put(timestamp, variation);
     }
     @Override
