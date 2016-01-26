@@ -6,9 +6,6 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
-/**
- * Created by rchabot on 23/01/16.
- */
 public class Indice implements Writable {
     private String libelle;
     private double last;

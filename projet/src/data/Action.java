@@ -7,9 +7,6 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
-/**
- * Created by rchabot on 23/01/16.
- */
 public class Action implements Writable {
     private long timestamp;
     private String libelle;

@@ -25,9 +25,6 @@ import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.TreeMap;
 
-/**
- * Created by rchabot on 23/01/16.
- */
 public class Program {
 
     public static class CleanerMapper extends Mapper<Object, BytesWritable, Text, Text>{

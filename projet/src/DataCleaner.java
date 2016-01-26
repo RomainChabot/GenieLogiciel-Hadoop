@@ -10,9 +10,6 @@ import org.jsoup.select.Elements;
 
 import java.io.*;
 
-/**
- * Created by rchabot on 24/01/16.
- */
 public class DataCleaner {
     private String srcFolder;
     private String dstFolder;
