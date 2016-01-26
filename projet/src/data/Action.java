@@ -11,17 +11,19 @@ import java.io.IOException;
  * Created by rchabot on 23/01/16.
  */
 public class Action implements Writable {
+    private long timestamp;
     private String libelle;
-    private double last;
-    private double var;
-    private double open;
-    private double high;
-    private double low;
-    private double varAn;
-    private double totVolume;
+    private Double last;
+    private Double var;
+    private Double open;
+    private Double high;
+    private Double low;
+    private Double varAn;
+    private Double totVolume;
 
     @Override
     public void write(DataOutput out) throws IOException {
+        out.writeLong(timestamp);
         out.writeUTF(libelle);
         out.writeDouble(last);
         out.writeDouble(var);
@@ -34,6 +36,7 @@ public class Action implements Writable {
 
     @Override
     public void readFields(DataInput in) throws IOException {
+        timestamp = in.readLong();
         libelle = in.readUTF();
         last = in.readDouble();
         var = in.readDouble();
@@ -44,12 +47,12 @@ public class Action implements Writable {
         totVolume = in.readDouble();
     }
 
-    public double getLast() {
-        return last;
+    public long getTimestamp() {
+        return timestamp;
     }
 
-    public void setLast(double last) {
-        this.last = last;
+    public void setTimestamp(long timestamp) {
+        this.timestamp = timestamp;
     }
 
     public String getLibelle() {
@@ -60,58 +63,67 @@ public class Action implements Writable {
         this.libelle = libelle;
     }
 
-    public double getVar() {
+    public Double getLast() {
+        return last;
+    }
+
+    public void setLast(Double last) {
+        this.last = last;
+    }
+
+    public Double getVar() {
         return var;
     }
 
-    public void setVar(double var) {
+    public void setVar(Double var) {
         this.var = var;
     }
 
-    public double getOpen() {
+    public Double getOpen() {
         return open;
     }
 
-    public void setOpen(double open) {
+    public void setOpen(Double open) {
         this.open = open;
     }
 
-    public double getHigh() {
+    public Double getHigh() {
         return high;
     }
 
-    public void setHigh(double high) {
+    public void setHigh(Double high) {
         this.high = high;
     }
 
-    public double getLow() {
+    public Double getLow() {
         return low;
     }
 
-    public void setLow(double low) {
+    public void setLow(Double low) {
         this.low = low;
     }
 
-    public double getVarAn() {
+    public Double getVarAn() {
         return varAn;
     }
 
-    public void setVarAn(double varAn) {
+    public void setVarAn(Double varAn) {
         this.varAn = varAn;
     }
 
-    public double getTotVolume() {
+    public Double getTotVolume() {
         return totVolume;
     }
 
-    public void setTotVolume(double totVolume) {
+    public void setTotVolume(Double totVolume) {
         this.totVolume = totVolume;
     }
 
     @Override
     public String toString() {
         return "Action{" +
-                "libelle='" + libelle + '\'' +
+                "timestamp=" + timestamp +
+                ", libelle='" + libelle + '\'' +
                 ", var=" + var +
                 ", open=" + open +
                 ", high=" + high +
@@ -135,23 +147,27 @@ public class Action implements Writable {
     public static Action getFromCSV(String actionCSV) {
         Action action = new Action();
         String tokens[] = actionCSV.split(";");
-        if (tokens.length == 8){
-            action.setLibelle(tokens[0]);
-            try {
-                action.setLast(Double.valueOf(tokens[1]));
-                action.setVar(Double.valueOf(tokens[2]));
-                action.setOpen(Double.valueOf(tokens[3]));
-                action.setHigh(Double.valueOf(tokens[4]));
-                action.setLow(Double.valueOf(tokens[5]));
-                action.setVarAn(Double.valueOf(tokens[6]));
-                action.setTotVolume(Double.valueOf(tokens[7]));
-                return action;
-            }catch (NumberFormatException e){
-                return null;
-            }
+        if (tokens.length == 9){
+            action.setLibelle(tokens[1]);
+            action.setTimestamp(Long.valueOf(tokens[0]));
+            action.setLast(getValue(tokens[2]));
+            action.setVar(getValue(tokens[3]));
+            action.setOpen(getValue(tokens[4]));
+            action.setHigh(getValue(tokens[5]));
+            action.setLow(getValue(tokens[6]));
+            action.setVarAn(getValue(tokens[7]));
+            action.setTotVolume(getValue(tokens[8]));
+            return action;
         } else {
             return null;
         }
+    }
+    
+    private static Double getValue(String valueToParse){
+        if (valueToParse.equals("ND")) { return null; }
+        Double res = null;
+        try { res = Double.valueOf(valueToParse);} catch (NumberFormatException e){}
+        return res;
     }
 
     public static String convertToCSV(Element e, long unixTimestamp) {

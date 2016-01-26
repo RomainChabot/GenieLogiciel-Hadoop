@@ -53,7 +53,7 @@ public class Program {
                 Elements indexTab = doc.select("div.main-content > table > tbody > tr");
                 for (Element e : indexTab) {
                     // Filename, remove unauthorized character
-                    keyText.set(e.getElementsByClass("tdv-libelle").text().replaceAll(":","."));
+                    keyText.set(e.getElementsByClass("tdv-libelle").text().replaceAll(":",".")+".srd");
                     valueText.set(Action.convertToCSV(e, unixTimestamp));
                     context.write(keyText, valueText);
                 }
@@ -92,7 +92,7 @@ public class Program {
                     //exception handling left as an exercise for the reader
                 }
             }
-            fs.copyFromLocalFile(new Path(tmpOutput.getPath()), new Path(dstFolder+"/"+key));
+            fs.copyFromLocalFile(new Path(tmpOutput.getPath()), new Path(dstFolder+"/data/"+key));
             tmpOutput.delete();
         }
     }
@@ -100,18 +100,15 @@ public class Program {
     public static class TopKMapper extends Mapper<Object, Text, Text, TopKVal> {
         private Text word = new Text();
         private TopKVal val = new TopKVal();
-        String fileName;
-        long startTimestamp;
-        long endTimestamp;
-        String fileExtension;
-        long unixTimestamp;
-        int k = 0;
+        private long startTimestamp;
+        private long endTimestamp;
+        private String fileExtension;
+        private int k = 0;
 
         @Override
         protected void setup(Context context) throws java.io.IOException, java.lang.InterruptedException
         {
-            fileName = ((FileSplit) context.getInputSplit()).getPath().toString();
-            unixTimestamp = Long.parseLong(new File(FilenameUtils.removeExtension(fileName)).getName());
+            String fileName = ((FileSplit) context.getInputSplit()).getPath().toString();
             fileExtension = FilenameUtils.getExtension(fileName);
             Configuration conf = context.getConfiguration();
             k = conf.getInt("k", 10);
@@ -123,16 +120,18 @@ public class Program {
         protected void map(Object key, Text value, Context context) throws IOException, InterruptedException {
             if (fileExtension.equals("srd")) {
                 Action action = Action.getFromCSV(value.toString());
-                word.set(action.getLibelle());
-                val.setVal(action.getLast());
-                if (unixTimestamp == startTimestamp) {
-                    val.setBoundaryDate(BoundaryDate.BEGINNING);
-                    context.write(word, val);
-                } else if (unixTimestamp == endTimestamp){
-                    val.setBoundaryDate(BoundaryDate.END);
-                    context.write(word, val);
-                } else {
-                    // Rien
+                if (action != null && action.getLast() != null) {
+                    word.set(action.getLibelle());
+                    val.setVal(action.getLast());
+                    if (action.getTimestamp() == startTimestamp) {
+                        val.setBoundaryDate(BoundaryDate.BEGINNING);
+                        context.write(word, val);
+                    } else if (action.getTimestamp() == endTimestamp) {
+                        val.setBoundaryDate(BoundaryDate.END);
+                        context.write(word, val);
+                    } else {
+                        // Rien
+                    }
                 }
             } else if (fileExtension.equals("ind")) {
 
@@ -177,12 +176,12 @@ public class Program {
         @Override
         protected void cleanup(Context context) throws IOException, InterruptedException {
             DecimalFormat df3 = new DecimalFormat("#.###");
-            int pos = topK.size();
-            for (double key : topK.keySet()) {
+            ArrayList<Double> topKList = new ArrayList<>(topK.keySet());
+            for (int pos=topKList.size()-1; pos >=0; pos--) {
+                Double key = topKList.get(pos);
                 Text value = topK.get(key);
-                word.set(pos);
+                word.set(topKList.size()-pos);
                 context.write(word, new Text(value+" ("+df3.format(key)+"%)"));
-                pos--;
             }
         }
     }
@@ -301,9 +300,7 @@ public class Program {
                 conf = new Configuration();
                 conf.set("srcFolder", args[1]);
                 conf.set("dstFolder", args[2]);
-                job = configureJob(conf, inputPath, outputPath);
-                job.setOutputFormatClass(TextOutputFormat.class);
-                job.setInputFormatClass(WholeFileInputFormat.class);
+                job = configureCleanerJob(conf, inputPath, outputPath);
                 configJobWithReflection(job, CleanerMapper.class, null, CleanerReducer.class);
                 returnCode = job.waitForCompletion(true) ? 0 : 1;
                 System.out.println("Finished job with result " + returnCode);
@@ -316,9 +313,7 @@ public class Program {
                 conf.setInt("k", Integer.parseInt(args[3]));
                 conf.setLong("start", Long.parseLong(args[4]));
                 conf.setLong("end", Long.parseLong(args[5]));
-                job = configureJob(conf, inputPath, outputPath);
-                job.setOutputFormatClass(TextOutputFormat.class);
-                job.setInputFormatClass(TextInputFormat.class);
+                job = configureTopKJob(conf, inputPath, outputPath);
                 configJobWithReflection(job, TopKMapper.class, null, TopKReducer.class);
                 returnCode = job.waitForCompletion(true) ? 0 : 1;
                 System.out.println("Finished job with result " + returnCode);
@@ -331,9 +326,7 @@ public class Program {
                 conf.setInt("k", Integer.parseInt(args[3]));
                 conf.setLong("start", Long.parseLong(args[4]));
                 conf.setLong("end", Long.parseLong(args[5]));
-                job = configureJob(conf, inputPath, outputPath);
-                job.setOutputFormatClass(TextOutputFormat.class);
-                job.setInputFormatClass(WholeFileInputFormat.class);
+                job = configureCorrelationJob(conf, inputPath, outputPath);
                 configJobWithReflection(job, CorrelationMapper.class, null, CorrelationReducer.class);
                 returnCode = job.waitForCompletion(true) ? 0 : 1;
                 System.out.println("Finished job with result " + returnCode);
@@ -373,16 +366,38 @@ public class Program {
         return (Class<?>) parameterizedType.getActualTypeArguments()[parameterIndex];
     }
 
-    public static Job configureJob(Configuration conf, String inputPath, String outputPath) throws IOException {
+    public static Job configureCleanerJob(Configuration conf, String inputPath, String outputPath) throws IOException {
         Job job = Job.getInstance(conf, "Program");
-        job.setNumReduceTasks(1);
+        job.setNumReduceTasks(10);
         job.setJarByClass(Program.class);
+        job.setOutputFormatClass(TextOutputFormat.class);
+        job.setInputFormatClass(WholeFileInputFormat.class);
         FileInputFormat.addInputPath(job, new Path(inputPath));
         FileOutputFormat.setOutputPath(job, new Path(outputPath));
         return job;
     }
 
+    public static Job configureTopKJob(Configuration conf, String inputPath, String outputPath) throws IOException {
+        Job job = Job.getInstance(conf, "Program");
+        job.setNumReduceTasks(1);
+        job.setJarByClass(Program.class);
+        job.setOutputFormatClass(TextOutputFormat.class);
+        job.setInputFormatClass(TextInputFormat.class);
+        FileInputFormat.addInputPath(job, new Path(inputPath));
+        FileOutputFormat.setOutputPath(job, new Path(outputPath));
+        return job;
+    }
 
+    public static Job configureCorrelationJob(Configuration conf, String inputPath, String outputPath) throws IOException {
+        Job job = Job.getInstance(conf, "Program");
+        job.setNumReduceTasks(1);
+        job.setJarByClass(Program.class);
+        job.setOutputFormatClass(TextOutputFormat.class);
+        job.setInputFormatClass(WholeFileInputFormat.class);
+        FileInputFormat.addInputPath(job, new Path(inputPath));
+        FileOutputFormat.setOutputPath(job, new Path(outputPath));
+        return job;
+    }
 
 
 }
