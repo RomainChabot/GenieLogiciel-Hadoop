@@ -1,6 +1,7 @@
 package data;
 
 import org.apache.hadoop.io.Writable;
+import org.jsoup.nodes.Element;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -151,5 +152,19 @@ public class Action implements Writable {
         } else {
             return null;
         }
+    }
+
+    public static String convertToCSV(Element e, long unixTimestamp) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(unixTimestamp+";");
+        builder.append(e.getElementsByClass("tdv-libelle").text()+";");
+        builder.append(e.getElementsByClass("tdv-last").text().replaceAll(" ", "").replaceAll("\\(c\\)", "").replaceAll("\\(s\\)", "")).append(";");
+        builder.append(e.getElementsByClass("tdv-var").text().replaceAll("%", "")+";");
+        builder.append(e.getElementsByClass("tdv-open").text().replaceAll(" ", "")+";");
+        builder.append(e.getElementsByClass("tdv-high").text().replaceAll(" ", "")+";");
+        builder.append(e.getElementsByClass("tdv-low").text().replaceAll(" ", "")+";");
+        builder.append(e.getElementsByClass("tdv-var_an").text().replaceAll(" ", "").replaceAll("%", "")+";");
+        builder.append(e.getElementsByClass("tdv-tot_volume").text().replaceAll(" ", ""));
+        return builder.toString();
     }
 }
