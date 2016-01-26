@@ -1,6 +1,5 @@
 package data;
 
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
 import java.io.DataInput;
@@ -121,17 +120,36 @@ public class Action implements Writable {
                 '}';
     }
 
-    public static Action getFromCSV(Text value) {
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Action action = (Action) o;
+
+        return !(libelle != null ? !libelle.equals(action.libelle) : action.libelle != null);
+
+    }
+
+    public static Action getFromCSV(String actionCSV) {
         Action action = new Action();
-        String tokens[] = value.toString().split(";");
-        action.setLibelle(tokens[0]);
-        try { action.setLast(Double.valueOf(tokens[1]));} catch (NumberFormatException e){}
-        try { action.setVar(Double.valueOf(tokens[2]));} catch (NumberFormatException e){}
-        try { action.setOpen(Double.valueOf(tokens[3]));} catch (NumberFormatException e){}
-        try { action.setHigh(Double.valueOf(tokens[4]));} catch (NumberFormatException e){}
-        try { action.setLow(Double.valueOf(tokens[5]));} catch (NumberFormatException e){}
-        try { action.setVarAn(Double.valueOf(tokens[6]));} catch (NumberFormatException e){}
-        try { action.setTotVolume(Double.valueOf(tokens[7]));} catch (NumberFormatException e){}
-        return action;
+        String tokens[] = actionCSV.split(";");
+        if (tokens.length == 8){
+            action.setLibelle(tokens[0]);
+            try {
+                action.setLast(Double.valueOf(tokens[1]));
+                action.setVar(Double.valueOf(tokens[2]));
+                action.setOpen(Double.valueOf(tokens[3]));
+                action.setHigh(Double.valueOf(tokens[4]));
+                action.setLow(Double.valueOf(tokens[5]));
+                action.setVarAn(Double.valueOf(tokens[6]));
+                action.setTotVolume(Double.valueOf(tokens[7]));
+                return action;
+            }catch (NumberFormatException e){
+                return null;
+            }
+        } else {
+            return null;
+        }
     }
 }

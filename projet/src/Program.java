@@ -1,9 +1,12 @@
 import data.Action;
 import data.BoundaryDate;
+import data.CorrelationKey;
 import data.TopKVal;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.BytesWritable;
+import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
@@ -15,10 +18,10 @@ import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.lang.reflect.ParameterizedType;
 import java.text.DecimalFormat;
+import java.util.ArrayList;
 import java.util.TreeMap;
 
 /**
@@ -46,28 +49,22 @@ public class Program {
             k = conf.getInt("k", 10);
             startTimestamp = conf.getLong("start", 0);
             endTimestamp = conf.getLong("end", 0);
-/*            System.out.println("unixTimeStamp: "+unixTimestamp);
-            System.out.println("startTimestamp: "+startTimestamp);
-            System.out.println("endTimestamp: "+endTimestamp);
-            System.out.println("k : "+k);*/
         }
 
         @Override
         protected void map(Object key, Text value, Context context) throws IOException, InterruptedException {
             if (fileExtension.equals("srd")) {
-                Action action = Action.getFromCSV(value);
+                Action action = Action.getFromCSV(value.toString());
                 word.set(action.getLibelle());
                 val.setVal(action.getLast());
                 if (unixTimestamp == startTimestamp) {
                     val.setBoundaryDate(BoundaryDate.BEGINNING);
-                    //System.out.println("action: "+action.getLibelle()+" (BEGINNING)");
                     context.write(word, val);
                 } else if (unixTimestamp == endTimestamp){
                     val.setBoundaryDate(BoundaryDate.END);
-                    //System.out.println("action: "+action.getLibelle()+" (END)");
                     context.write(word, val);
                 } else {
-                    // On envoie rien
+                    // Rien
                 }
             } else if (fileExtension.equals("ind")) {
 
@@ -94,14 +91,11 @@ public class Program {
             double startVal = 0.0;
             double endVal = 0.0;
             for (TopKVal val : values) {
-                //System.out.println("Action "+key);
                 if (val.getBoundaryDate().isBeginning()) {
                     startVal = val.getVal();
-                    //System.out.println("BEGINNING: startVal = "+startVal);
                 }
                 if (val.getBoundaryDate().isEnd()) {
                     endVal = val.getVal();
-                    //System.out.println("END: endVal = "+endVal);
                 }
             }
             double var = endVal - startVal;
@@ -125,11 +119,101 @@ public class Program {
         }
     }
 
+    public static class CorrelationMapper extends Mapper<Object, BytesWritable, CorrelationKey, DoubleWritable>{
+        private Text word = new Text();
+        private TopKVal val = new TopKVal();
+        String fileName;
+        long startTimestamp;
+        long endTimestamp;
+        String fileExtension;
+        long unixTimestamp;
+        int k = 0;
+
+
+        @Override
+        protected void setup(Context context) throws java.io.IOException, java.lang.InterruptedException
+        {
+            fileName = ((FileSplit) context.getInputSplit()).getPath().toString();
+            unixTimestamp = Long.parseLong(new File(FilenameUtils.removeExtension(fileName)).getName());
+            fileExtension = FilenameUtils.getExtension(fileName);
+            Configuration conf = context.getConfiguration();
+            k = conf.getInt("k", 10);
+            startTimestamp = conf.getLong("start", 0);
+            endTimestamp = conf.getLong("end", 0);
+        }
+
+        @Override
+        protected void map(Object key, BytesWritable value, Context context) throws IOException, InterruptedException {
+            InputStream is = new ByteArrayInputStream(value.getBytes());
+            BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+            String line;
+            ArrayList<Action> actions = new ArrayList<>();
+            if (fileExtension.equals("srd")) {
+                while ((line = reader.readLine()) != null) {
+                    Action action = Action.getFromCSV(line.toString());
+                    if (action != null)
+                        actions.add(action);
+                }
+            } else if (fileExtension.equals("ind")) {
+
+            } else if (fileExtension.equals("dev")){
+
+            }
+
+            for (int i=0; i < actions.size(); i++){
+                for (int j=i+1; j < actions.size(); j++){
+                    Action action1 = actions.get(i);
+                    Action action2 = actions.get(j);
+                    if (!action1.equals(action2)){
+                        double corrIndice = Math.abs(action1.getVar() - action2.getVar());
+                        CorrelationKey correlationKey = new CorrelationKey();
+                        correlationKey.setActions(action1.getLibelle(), action2.getLibelle());
+                        context.write(correlationKey, new DoubleWritable(corrIndice));
+                    }
+                }
+            }
+        }
+    }
+
+    public static class CorrelationReducer extends Reducer<CorrelationKey, DoubleWritable, CorrelationKey, DoubleWritable> {
+        int k = 0;
+        private TreeMap<Double, CorrelationKey> topK = new TreeMap<Double, CorrelationKey>();
+
+        @Override
+        protected void setup(Context context) throws IOException, InterruptedException {
+            Configuration conf = context.getConfiguration();
+            k = conf.getInt("k", 10);
+        }
+
+        @Override
+        protected void reduce(CorrelationKey key, Iterable<DoubleWritable> values, Context context) throws IOException, InterruptedException {
+            System.out.println(key.toString());
+            double sum = 0;
+            for (DoubleWritable corrInd : values){
+                sum += corrInd.get();
+            }
+            CorrelationKey treeValue = new CorrelationKey();
+            treeValue.setActions(key.getAction1(), key.getAction2());
+            topK.put(sum, treeValue);
+            if (topK.size() > k)
+                topK.remove(topK.lastKey());
+        }
+
+        @Override
+        protected void cleanup(Context context) throws IOException, InterruptedException {
+            for (double key : topK.keySet()) {
+                CorrelationKey correlationKey = topK.get(key);
+                context.write(correlationKey, new DoubleWritable(key));
+            }
+        }
+    }
 
     public static void main(String[] args) throws Exception {
         String command = "";
         String inputPath = "";
         String outputPath = "";
+        Configuration conf;
+        Job job;
         int returnCode;
 
         if (args.length > 2) {
@@ -150,20 +234,39 @@ public class Program {
                 if (args.length != 6) {
                     return;
                 }
-                Configuration conf = new Configuration();
+                conf = new Configuration();
                 conf.setInt("k", Integer.parseInt(args[3]));
                 conf.setLong("start", Long.parseLong(args[4]));
                 conf.setLong("end", Long.parseLong(args[5]));
-                Job job = configureJob(conf, inputPath, outputPath);
+                job = configureJob(conf, inputPath, outputPath);
+                job.setOutputFormatClass(TextOutputFormat.class);
+                job.setInputFormatClass(TextInputFormat.class);
                 configJobWithReflection(job, TopKMapper.class, null, TopKReducer.class);
                 returnCode = job.waitForCompletion(true) ? 0 : 1;
                 System.out.println("Finished job with result " + returnCode);
                 break;
+            case "correlation":
+                if (args.length != 6) {
+                    return;
+                }
+                conf = new Configuration();
+                conf.setInt("k", Integer.parseInt(args[3]));
+                conf.setLong("start", Long.parseLong(args[4]));
+                conf.setLong("end", Long.parseLong(args[5]));
+                job = configureJob(conf, inputPath, outputPath);
+                job.setOutputFormatClass(TextOutputFormat.class);
+                job.setInputFormatClass(WholeFileInputFormat.class);
+                configJobWithReflection(job, CorrelationMapper.class, null, CorrelationReducer.class);
+                returnCode = job.waitForCompletion(true) ? 0 : 1;
+                System.out.println("Finished job with result " + returnCode);
+                break;
+
             default:
                 System.out.println("Usage: commands args");
                 System.out.println("commands:");
                 System.out.println(" - clean [inputFolder] [outputFolder]");
                 System.out.println(" - topk [inputURI] [outputURI] k [startTime] [endTime]");
+                System.out.println(" - correlation [inputURI] [outputURI] k [startTime] [endTime]");
         }
 
     }
@@ -180,8 +283,6 @@ public class Program {
         job.setMapOutputValueClass(findSuperClassParameterType(mapper, Mapper.class, 3));
         job.setOutputKeyClass(findSuperClassParameterType(reducer, Reducer.class, 2));
         job.setOutputValueClass(findSuperClassParameterType(reducer, Reducer.class, 3));
-        job.setOutputFormatClass(TextOutputFormat.class);
-        job.setInputFormatClass(TextInputFormat.class);
     }
 
     public static Class<?> findSuperClassParameterType(Class<?> subClass, Class<?> classOfInterest, int parameterIndex) {
@@ -202,5 +303,8 @@ public class Program {
         FileOutputFormat.setOutputPath(job, new Path(outputPath));
         return job;
     }
+
+
+
 
 }
