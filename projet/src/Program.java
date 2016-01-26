@@ -1,6 +1,7 @@
 import data.Action;
 import data.BoundaryDate;
 import data.CorrelationKey;
+import data.CorrelationValue;
 import data.TopKVal;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -183,7 +184,7 @@ public class Program {
         }
     }
 
-    public static class CorrelationMapper extends Mapper<Object, BytesWritable, CorrelationKey, DoubleWritable>{
+    public static class CorrelationMapper extends Mapper<Object, BytesWritable, String, CorrelationValue>{
         private Text word = new Text();
         private TopKVal val = new TopKVal();
         private
@@ -242,9 +243,9 @@ public class Program {
         }
     }
 
-    public static class CorrelationReducer extends Reducer<CorrelationKey, DoubleWritable, CorrelationKey, DoubleWritable> {
+    public static class CorrelationReducer extends Reducer<String, CorrelationValue, String, CorrelationValue> {
         int k = 0;
-        private TreeMap<Double, CorrelationKey> topK = new TreeMap<Double, CorrelationKey>();
+        private TreeMap<CorrelationValue, String> topK = new TreeMap<>();
 
         @Override
         protected void setup(Context context) throws IOException, InterruptedException {
@@ -253,7 +254,7 @@ public class Program {
         }
 
         @Override
-        protected void reduce(CorrelationKey key, Iterable<DoubleWritable> values, Context context) throws IOException, InterruptedException {
+        protected void reduce(String key, Iterable<CorrelationValue> values, Context context) throws IOException, InterruptedException {
             System.out.println(key.toString());
             double sum = 0;
             for (DoubleWritable corrInd : values){
