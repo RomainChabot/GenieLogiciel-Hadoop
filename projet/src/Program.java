@@ -349,10 +349,21 @@ public class Program {
 
             DecimalFormat df3 = new DecimalFormat("#.###");
             ArrayList<Double> topKCorrelationList = new ArrayList<>(topKCorrelation.keySet());
-            for (int pos=topKCorrelationList.size()-1; pos >=0; pos--) {
-                Double correlation = topKCorrelationList.get(pos);
-                StringPair actionsPair = topKCorrelation.get(correlation);
-                context.write(new Text("Corrélation = "+df3.format(correlation)), actionsPair);
+            if (mode.equals("+")) {
+                context.write(new Text("Action les plus corrélées"), null);
+                for (int pos = topKCorrelationList.size() - 1; pos >= 0; pos--) {
+                    Double correlation = topKCorrelationList.get(pos);
+                    StringPair actionsPair = topKCorrelation.get(correlation);
+                    context.write(new Text("Corrélation = " + df3.format(correlation)), actionsPair);
+                }
+            }
+            if (mode.equals("-")) {
+                context.write(new Text("Action les plus décorrélées"), null);
+                for (int pos = 0; pos < topKCorrelationList.size(); pos++) {
+                    Double correlation = topKCorrelationList.get(pos);
+                    StringPair actionsPair = topKCorrelation.get(correlation);
+                    context.write(new Text("Corrélation = " + df3.format(correlation)), actionsPair);
+                }
             }
         }
     }
