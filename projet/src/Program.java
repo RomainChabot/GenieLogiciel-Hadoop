@@ -243,6 +243,7 @@ public class Program {
 
     public static class CorrelationReducer extends Reducer<Text, AvgHistoPair, Text, StringPair> {
         int k = 0;
+        String mode = "+";
         private TreeMap<Double, StringPair> topKCorrelation = new TreeMap<>();
         private Map<String, Double> varianceMap = new HashMap<>();
         private Map<String, Double> avgMap = new HashMap<>();
@@ -252,6 +253,7 @@ public class Program {
         protected void setup(Context context) throws IOException, InterruptedException {
             Configuration conf = context.getConfiguration();
             k = conf.getInt("k", 10);
+            mode = conf.get("mode","+");
         }
 
         @Override
@@ -323,11 +325,23 @@ public class Program {
                             }
                         }
                         covariance /= nbVarValid;
-                        double correlation = Math.abs(covariance / ((Math.sqrt(variance1) * Math.sqrt(variance2))));
+                        double correlation = covariance / ((Math.sqrt(variance1) * Math.sqrt(variance2)));
                         StringPair actionsPair = new StringPair(action1, action2);
-                        topKCorrelation.put(correlation, actionsPair);
-                        if (topKCorrelation.size() > k) {
-                            topKCorrelation.remove(topKCorrelation.firstKey());
+                        if (mode.equals("+")) {
+                            if (correlation > 0) {
+                                topKCorrelation.put(correlation, actionsPair);
+                                if (topKCorrelation.size() > k) {
+                                    topKCorrelation.remove(topKCorrelation.firstKey());
+                                }
+                            }
+                        }
+                        if (mode.equals("-")){
+                            if (correlation < 0) {
+                                topKCorrelation.put(correlation, actionsPair);
+                                if (topKCorrelation.size() > k) {
+                                    topKCorrelation.remove(topKCorrelation.lastKey());
+                                }
+                            }
                         }
                     }
                 }
@@ -391,6 +405,7 @@ public class Program {
                 conf.setInt("k", Integer.parseInt(args[3]));
                 conf.setLong("start", Long.parseLong(args[4]));
                 conf.setLong("end", Long.parseLong(args[5]));
+                conf.set("mode", args[6]);
                 job = configureCorrelationJob(conf, inputPath, outputPath);
                 configJobWithReflection(job, CorrelationMapper.class, null, CorrelationReducer.class);
                 returnCode = job.waitForCompletion(true) ? 0 : 1;
@@ -401,8 +416,8 @@ public class Program {
                 System.out.println("Usage: commands args");
                 System.out.println("commands:");
                 System.out.println(" - clean [inputFolder] [outputFolder]");
-                System.out.println(" - topk [inputURI] [outputURI] k [startTime] [endTime]");
-                System.out.println(" - correlation [inputURI] [outputURI] k [startTime] [endTime]");
+                System.out.println(" - topk [inputURI] [outputURI] k [startTimestamp] [endTimestamp]");
+                System.out.println(" - correlation [inputURI] [outputURI] k [mode: +|-] [startTimestamp] [endTimestamp]");
         }
 
     }
