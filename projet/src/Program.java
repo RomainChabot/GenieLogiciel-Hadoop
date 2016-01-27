@@ -398,7 +398,7 @@ public class Program {
                 System.out.println("Finished job with result " + returnCode);
                 break;
             case "correlation":
-                if (args.length != 6) {
+                if (args.length != 7) {
                     return;
                 }
                 conf = new Configuration();
