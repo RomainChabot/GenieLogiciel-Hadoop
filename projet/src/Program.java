@@ -403,9 +403,9 @@ public class Program {
                 }
                 conf = new Configuration();
                 conf.setInt("k", Integer.parseInt(args[3]));
-                conf.setLong("start", Long.parseLong(args[4]));
-                conf.setLong("end", Long.parseLong(args[5]));
-                conf.set("mode", args[6]);
+                conf.set("mode", args[4]);
+                conf.setLong("start", Long.parseLong(args[5]));
+                conf.setLong("end", Long.parseLong(args[6]));
                 job = configureCorrelationJob(conf, inputPath, outputPath);
                 configJobWithReflection(job, CorrelationMapper.class, null, CorrelationReducer.class);
                 returnCode = job.waitForCompletion(true) ? 0 : 1;
@@ -416,8 +416,8 @@ public class Program {
                 System.out.println("Usage: commands args");
                 System.out.println("commands:");
                 System.out.println(" - clean [inputFolder] [outputFolder]");
-                System.out.println(" - topk [inputURI] [outputURI] k [startTimestamp] [endTimestamp]");
-                System.out.println(" - correlation [inputURI] [outputURI] k [mode: +|-] [startTimestamp] [endTimestamp]");
+                System.out.println(" - topk [inputURI] [outputURI] [k] [startTimestamp] [endTimestamp]");
+                System.out.println(" - correlation [inputURI] [outputURI] [k] [mode: + ou -] [startTimestamp] [endTimestamp]");
         }
 
     }
