@@ -6,11 +6,11 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
-public class CorrelationValue extends Pair<Double, WritableActionMap> implements Writable{
+public class AvgHistoPair extends Pair<Double, VarHistoMap> implements Writable{
 
-    public CorrelationValue(){
+    public AvgHistoPair(){
         fst = new Double(0.0);
-        snd = new WritableActionMap();
+        snd = new VarHistoMap();
     }
 
 
@@ -20,13 +20,13 @@ public class CorrelationValue extends Pair<Double, WritableActionMap> implements
     public void setAvg(Double variance) {
         fst = variance;
     }
-    public WritableActionMap getVariation(){
+    public VarHistoMap getVariation(){
         return snd;
     }
     public Double getVariationAt(Long timestamp){
         return snd.get(timestamp);
     }
-    public void setVariation(WritableActionMap actionMap){
+    public void setVariation(VarHistoMap actionMap){
         snd = actionMap;
     }
     public void putVariation(Long timestamp, Double variation){

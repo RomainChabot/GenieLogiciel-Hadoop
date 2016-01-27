@@ -7,7 +7,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.HashMap;
 
-public class WritableActionMap extends HashMap<Long, Double> implements Writable{
+public class VarHistoMap extends HashMap<Long, Double> implements Writable{
     @Override
     public void write(DataOutput dataOutput) throws IOException {
         dataOutput.writeInt(size());

@@ -1,4 +1,5 @@
 import data.*;
+import inputformat.WholeFileInputFormat;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -186,7 +187,7 @@ public class Program {
         }
     }
 
-    public static class CorrelationMapper extends Mapper<Object, BytesWritable, Text, CorrelationValue>{
+    public static class CorrelationMapper extends Mapper<Object, BytesWritable, Text, AvgHistoPair>{
         private Text word = new Text();
         String filePath;
         long startTimestamp;
@@ -218,7 +219,7 @@ public class Program {
             int nbVar = 0;
 
             if (fileExtension.equals("srd")) {
-                CorrelationValue val = new CorrelationValue();
+                AvgHistoPair val = new AvgHistoPair();
                 while ((line = reader.readLine()) != null) {
                     Action action = Action.getFromCSV(line);
                     if (action != null){
@@ -240,12 +241,12 @@ public class Program {
         }
     }
 
-    public static class CorrelationReducer extends Reducer<Text, CorrelationValue, Text, StringPair> {
+    public static class CorrelationReducer extends Reducer<Text, AvgHistoPair, Text, StringPair> {
         int k = 0;
         private TreeMap<Double, StringPair> topKCorrelation = new TreeMap<>();
         private Map<String, Double> varianceMap = new HashMap<>();
         private Map<String, Double> avgMap = new HashMap<>();
-        private Map<String, WritableActionMap> valuesMap = new HashMap<>();
+        private Map<String, VarHistoMap> varHistoMap = new HashMap<>();
 
         @Override
         protected void setup(Context context) throws IOException, InterruptedException {
@@ -254,17 +255,17 @@ public class Program {
         }
 
         @Override
-        protected void reduce(Text key, Iterable<CorrelationValue> values, Context context) throws IOException, InterruptedException {
+        protected void reduce(Text key, Iterable<AvgHistoPair> values, Context context) throws IOException, InterruptedException {
             String actionKey = key.toString();
-            for (CorrelationValue value : values) {
-                WritableActionMap t = value.getVariation();
-                WritableActionMap actionMap = new WritableActionMap();
+            for (AvgHistoPair value : values) {
+                VarHistoMap t = value.getVariation();
+                VarHistoMap actionMap = new VarHistoMap();
                 for (Long timestamp : t.keySet()) {
                     actionMap.put(timestamp, t.get(timestamp));
                 }
-                valuesMap.put(actionKey, actionMap);
+                varHistoMap.put(actionKey, actionMap);
                 avgMap.put(actionKey, value.getAvg());
-                WritableActionMap map = value.getVariation();
+                VarHistoMap map = value.getVariation();
                 double avg = value.getAvg();
                 double sum = 0.0;
                 int count = 0;
@@ -291,16 +292,16 @@ public class Program {
             for (String action : avgMap.keySet()) {
                 System.out.println(action+" "+avgMap.get(action));
             }
-            System.out.println("valuesMap");
-            for (String action : valuesMap.keySet()) {
+            System.out.println("varHistoMap");
+            for (String action : varHistoMap.keySet()) {
                 System.out.println("Action: "+action);
-                WritableActionMap map = valuesMap.get(action);
+                VarHistoMap map = varHistoMap.get(action);
                 for (Long timestamp : map.keySet()) {
                     System.out.println("<" + timestamp + "," + map.get(timestamp) + ">");
                 }
             }*/
-            for (String action1 : valuesMap.keySet()) {
-                for (String action2 : valuesMap.keySet()) {
+            for (String action1 : varHistoMap.keySet()) {
+                for (String action2 : varHistoMap.keySet()) {
                     Double covariance = 0.;
                     // On évite de calculer 2 fois la même paire
                     if (action1.compareTo(action2) < 0) {
@@ -309,8 +310,8 @@ public class Program {
                         double avg2 = avgMap.get(action2);
                         double variance1 = varianceMap.get(action1);
                         double variance2 = varianceMap.get(action2);
-                        WritableActionMap values1 = valuesMap.get(action1);
-                        WritableActionMap values2 = valuesMap.get(action2);
+                        VarHistoMap values1 = varHistoMap.get(action1);
+                        VarHistoMap values2 = varHistoMap.get(action2);
 
                         int nbVarValid = 0;
                         for (Long timestamp : values1.keySet()) {
