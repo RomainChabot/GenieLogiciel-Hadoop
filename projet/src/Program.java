@@ -158,6 +158,7 @@ public class Program {
         protected void reduce(Text key, Iterable<TopKVal> values, Context context) throws IOException, InterruptedException {
             double startVal = 0.0;
             double endVal = 0.0;
+            int cpt = 0;
             for (TopKVal val : values) {
                 if (val.getBoundaryDate().isBeginning()) {
                     startVal = val.getVal();
@@ -165,12 +166,15 @@ public class Program {
                 if (val.getBoundaryDate().isEnd()) {
                     endVal = val.getVal();
                 }
+                cpt++;
             }
-            double var = endVal - startVal;
-            String mapValue = key.toString();
-            topK.put(var, new Text(mapValue));
-            if (topK.size() > k){
-                topK.remove(topK.firstKey());
+            if (cpt == 2) {
+                double var = endVal - startVal;
+                String mapValue = key.toString();
+                topK.put(var, new Text(mapValue));
+                if (topK.size() > k) {
+                    topK.remove(topK.firstKey());
+                }
             }
         }
 
@@ -194,7 +198,6 @@ public class Program {
         long endTimestamp;
         String fileExtension;
         String fileName;
-        int k = 0;
 
         @Override
         protected void setup(Context context) throws java.io.IOException, java.lang.InterruptedException
@@ -204,7 +207,6 @@ public class Program {
             fileName = FilenameUtils.getName(filePath);
             fileName = FilenameUtils.removeExtension(fileName);
             Configuration conf = context.getConfiguration();
-            k = conf.getInt("k", 10);
             startTimestamp = conf.getLong("start", 0);
             endTimestamp = conf.getLong("end", 0);
         }
@@ -223,9 +225,11 @@ public class Program {
                 while ((line = reader.readLine()) != null) {
                     Action action = Action.getFromCSV(line);
                     if (action != null){
-                        val.putVariation(action.getTimestamp(), action.getVar());
-                        sum += action.getVar();
-                        nbVar++;
+                        if (action.getTimestamp() >= startTimestamp || action.getTimestamp() <= endTimestamp) {
+                            val.putVariation(action.getTimestamp(), action.getVar());
+                            sum += action.getVar();
+                            nbVar++;
+                        }
                     }
                 }
                 word.set(fileName);
@@ -350,7 +354,6 @@ public class Program {
             DecimalFormat df3 = new DecimalFormat("#.###");
             ArrayList<Double> topKCorrelationList = new ArrayList<>(topKCorrelation.keySet());
             if (mode.equals("+")) {
-                context.write(new Text("Action les plus corrélées"), null);
                 for (int pos = topKCorrelationList.size() - 1; pos >= 0; pos--) {
                     Double correlation = topKCorrelationList.get(pos);
                     StringPair actionsPair = topKCorrelation.get(correlation);
@@ -358,7 +361,6 @@ public class Program {
                 }
             }
             if (mode.equals("-")) {
-                context.write(new Text("Action les plus décorrélées"), null);
                 for (int pos = 0; pos < topKCorrelationList.size(); pos++) {
                     Double correlation = topKCorrelationList.get(pos);
                     StringPair actionsPair = topKCorrelation.get(correlation);
