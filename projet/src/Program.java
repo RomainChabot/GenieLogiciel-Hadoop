@@ -186,7 +186,7 @@ public class Program {
                 Double key = topKList.get(pos);
                 Text value = topK.get(key);
                 word.set(topKList.size()-pos);
-                context.write(word, new Text(value+" ("+df3.format(key)+"%)"));
+                context.write(word, new Text(value+" (+"+df3.format(key)+" €)"));
             }
         }
     }
